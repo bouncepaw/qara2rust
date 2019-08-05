@@ -33,13 +33,27 @@ sub line_type {
   return 'text';
 }
 
+# (line on which parsing ended,
+#  result of parsing)
+sub parse_bulleted_list_for_fn {
+  my ($line) = @_;
+  my $arglist = "(";
+
+  while (<STDIN>) {
+    my $type = line_type $_;
+    return ($_, substr($arglist, 0, -2) . ')') 
+      unless $type eq 'bullet' or $type eq 'text';
+    $_ =~ /^\s*[\*\-\+] \`?([^\`]*)/;
+    $arglist .= $1 . ', ' if $type eq 'bullet';
+  }
+}
+
 sub is_special_header {
   my $header_text = $_[0];
   # Extract first word.
   $header_text =~ /^([a-z]*)/;
   return exists $special_header_triggers{$1};
 }
-
 my $indent_size = 4;
 my $should_weave = 0;
 
@@ -161,6 +175,12 @@ if ($should_weave) {
 else {
   while (<STDIN>) {
     my $type = line_type $_;
+    if ($type eq 'bullet') {
+      my ($line, $res) = parse_bulleted_list_for_fn($_);
+      say $res;
+      print $line;
+      next;
+    }
     print "$type  $_";
   }
 }
