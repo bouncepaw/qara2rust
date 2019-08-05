@@ -136,8 +136,32 @@ my $prev_header_level = 0;
 my $curr_header_level = 0;
 my $this_section_is_special = 0;
 
-while (<>) {
-  my $type = line_type $_;
-  print "$type	$_";
+if ($should_weave) {
+  my $in_codelet = 0;
+  my $would_be_nice_to_clean_blank = 0;
+  while (<STDIN>) {
+    my $type = line_type $_;
+    if ($type eq "fence") {
+      # Invert state.
+      $in_codelet = $in_codelet ? 1 : 0;
+      $would_be_nice_to_clean_blank = 1 unless $in_codelet;
+    } 
+    elsif ($type eq "quote") {
+      $would_be_nice_to_clean_blank = 1;
+    }
+    elsif ($type eq "blank" and $would_be_nice_to_clean_blank) {
+      $would_be_nice_to_clean_blank = 0;
+    }
+    else {
+      $would_be_nice_to_clean_blank = 0;
+      print $_;
+    }
+  }
+}
+else {
+  while (<STDIN>) {
+    my $type = line_type $_;
+    print "$type  $_";
+  }
 }
 
