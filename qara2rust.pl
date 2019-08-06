@@ -21,16 +21,17 @@ sub extract_header {
 my %special_header_triggers = 
   map { $_ => 1 } ( "pub", "impl", "fn", "mod", "struct", "enum" );
 
+# Only subset of Markdown that is important for Qaraidel is checked.
 sub line_type {
-  my ($line) = @_;
-  # Only subset of Markdown that is important for Qaraidel is checked.
-  return 'header' if $line =~ m/^\s*\#{1,6} /;
-  return 'fence'  if $line =~ m/^\s*```/;
-  return 'bullet' if $line =~ m/^\s*[\*\-\+] /;
-  return 'index'  if $line =~ m/^\s*\d+\. /;
-  return 'quote'  if $line =~ m/^\s*\> /;
-  return 'blank'  if $line =~ m/^\s*$/;
-  return 'text';
+  given ($_) {
+    when(/^\s*\#{1,6} /)  { 'header' }
+    when(/^\s*```/)       { 'fence'  }
+    when(/^\s*[\*\-\+] /) { 'bullet' }
+    when(/^\s*\d+\. /)    { 'index'  }
+    when(/^\s*\> /)       { 'quote'  }
+    when(/^\s*$/)         { 'blank'  }
+    default               { 'text'   }
+  }
 }
 
 # Remove bullet and optional backticks from list item.
@@ -41,16 +42,24 @@ sub disbullet {
 
 # (line on which parsing ended,
 #  result of parsing)
-sub parse_bulleted_list_for_fn {
-  my $arglist = "(" . disbullet($_);
+sub parse_bulleted_list_generic {
+  my ($commencer, $joiner, $terminator, $first_line) = @_;
+  my $res = $commencer . disbullet($_);
 
   while (<STDIN>) {
     my $type = line_type $_;
-    return ($_, $arglist . ')') 
+    return ($_, $res . $terminator) 
       unless $type eq 'bullet' or $type eq 'text';
-    $arglist .= ', ' . disbullet $_ if $type eq 'bullet';
+    $res .= $joiner . disbullet $_ if $type eq 'bullet';
   }
 }
+
+sub parse_bulleted_list_for_fn {
+  parse_bulleted_list_generic('(', ', ', ')', $_) }
+sub parse_bulleted_list_for_struct {
+  parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
+sub parse_bulleted_list_for_enum {
+  parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
 
 sub is_special_header {
   my $header_text = $_[0];
