@@ -33,18 +33,22 @@ sub line_type {
   return 'text';
 }
 
+# Remove bullet and optional backticks from list item.
+sub disbullet {
+  $_ =~ /^\s*[\*\-\+] \`?([^\`]*)/;
+  $1;
+}
+
 # (line on which parsing ended,
 #  result of parsing)
 sub parse_bulleted_list_for_fn {
-  my ($line) = @_;
-  my $arglist = "(";
+  my $arglist = "(" . disbullet($_);
 
   while (<STDIN>) {
     my $type = line_type $_;
-    return ($_, substr($arglist, 0, -2) . ')') 
+    return ($_, $arglist . ')') 
       unless $type eq 'bullet' or $type eq 'text';
-    $_ =~ /^\s*[\*\-\+] \`?([^\`]*)/;
-    $arglist .= $1 . ', ' if $type eq 'bullet';
+    $arglist .= ', ' . disbullet $_ if $type eq 'bullet';
   }
 }
 
@@ -181,7 +185,7 @@ else {
       print $line;
       next;
     }
-    print "$type  $_";
+    print "$type	$_";
   }
 }
 

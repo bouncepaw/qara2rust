@@ -66,3 +66,6 @@ As with structs, no codelets are necessary to declare an enum.
 
 - `Normal`
 - `Strange`
+
+Your file must end with blank line.
+
