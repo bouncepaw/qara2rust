@@ -2,6 +2,7 @@
 use 5.010;
 use strict; 
 use warnings;
+use experimental;
 
 sub is_header {
   my ($line) = @_;
@@ -19,7 +20,7 @@ sub extract_header {
 }
 
 my %special_header_triggers = 
-  map { $_ => 1 } ( "pub", "impl", "fn", "mod", "struct", "enum" );
+  map { $_ => 1 } ( "pub", "impl", "fn", "mod", "struct", "enum", "unsafe" );
 
 # Only subset of Markdown that is important for Qaraidel is checked.
 sub line_type {
@@ -62,10 +63,36 @@ sub parse_bulleted_list_for_enum {
   parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
 
 sub is_special_header {
-  my $header_text = $_[0];
-  # Extract first word.
-  $header_text =~ /^([a-z]*)/;
-  return exists $special_header_triggers{$1};
+  my ($text) = @_;
+  # Extract first word and check if it it special.
+  if ($text =~ /^([a-z]*)/) {
+    (exists $special_header_triggers{$1}) ? 1 : 0;
+  } else {
+    0;
+  }
+}
+
+sub special_header_type {
+  my ($text) = @_;
+  my @words = split / /, $text;
+  foreach (@words) {
+    if ($_ =~ /(fn|mod|struct|enum|impl)/) {
+      return $1;
+    }
+  }
+  say "Something wrong with header: $text";
+  exit 1;
+}
+
+# (level, text, mode) where mode in {struct fn enum mod normal impl}
+sub parse_header {
+  $_ =~ /^\s*(\#{1,6}) (.*)/;
+  my $level = length $1;
+  my $text  = $2;
+  my $mode  = is_special_header($text)
+    ? special_header_type($text)
+    : 'normal';
+  "header at $level with text '$text' is $mode"
 }
 my $indent_size = 4;
 my $should_weave = 0;
@@ -192,6 +219,10 @@ else {
       my ($line, $res) = parse_bulleted_list_for_fn($_);
       say $res;
       print $line;
+      next;
+    }
+    if ($type eq 'header') {
+      say parse_header $_;
       next;
     }
     print "$type	$_";
