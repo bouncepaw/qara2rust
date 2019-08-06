@@ -2,7 +2,29 @@
 use 5.010;
 use strict; 
 use warnings;
-use experimental;
+use experimental qw( switch );
+
+sub New {
+  my ($type, $header) = @_;
+  ( 'type' => $type, 'header' => $header, 'body' => '' );
+}
+
+sub ApplyBulletedList {
+  my (%obj, $line) = @_;
+  given ($obj{'type'}) {
+    when('fn') { 
+      $obj{'header'} .= parse_bulleted_list_for_fn $line }
+    when(/struct|enum/) {
+      $obj{'body'} .= parse_bulleted_list_for_struct_or_enum $line }
+    default {}
+  }
+  %obj;
+}
+
+# TODO: finish the rest:
+sub ApplyNumberedList {}
+sub ApplyQuote {}
+sub ApplyCodelet {}
 
 sub is_header {
   my ($line) = @_;
@@ -57,9 +79,7 @@ sub parse_bulleted_list_generic {
 
 sub parse_bulleted_list_for_fn {
   parse_bulleted_list_generic('(', ', ', ')', $_) }
-sub parse_bulleted_list_for_struct {
-  parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
-sub parse_bulleted_list_for_enum {
+sub parse_bulleted_list_for_struct_or_enum {
   parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
 
 sub is_special_header {
@@ -92,8 +112,20 @@ sub parse_header {
   my $mode  = is_special_header($text)
     ? special_header_type($text)
     : 'normal';
-  "header at $level with text '$text' is $mode"
+  ($level, $text, $mode);
 }
+
+my $nest_level = 0;
+my @opened_blocks = ();
+sub open_block {
+  say '{';
+  $nest_level += 1;
+}
+sub close_block {
+  say "}";
+  
+}
+
 my $indent_size = 4;
 my $should_weave = 0;
 
@@ -185,11 +217,6 @@ EOK
   }
 }
 
-my $nest_level = 0;
-my $prev_header_level = 0;
-my $curr_header_level = 0;
-my $this_section_is_special = 0;
-
 if ($should_weave) {
   my $in_codelet = 0;
   my $would_be_nice_to_clean_blank = 0;
@@ -211,21 +238,36 @@ if ($should_weave) {
       print $_;
     }
   }
+  exit 0;
 }
-else {
-  while (<STDIN>) {
-    my $type = line_type $_;
-    if ($type eq 'bullet') {
-      my ($line, $res) = parse_bulleted_list_for_fn($_);
-      say $res;
-      print $line;
-      next;
-    }
-    if ($type eq 'header') {
-      say parse_header $_;
-      next;
-    }
-    print "$type	$_";
+
+my $prev_header_level = 0;
+my $curr_header_level = 0;
+my $prev_mode = 'normal';
+my $curr_mode = 'normal';
+
+while (<STDIN>) {
+  my $type = line_type $_;
+  if ($type eq 'bullet') {
+    my ($line, $res) = parse_bulleted_list_for_fn($_);
+    say $res;
+    print $line;
+  }
+
+  elsif ($type eq 'header') {
+    $prev_header_level = $curr_header_level;
+    $prev_mode = $curr_mode;
+    my ($new_header_level, $header_text, $new_mode) = parse_header $_;
+    $curr_header_level = $new_header_level;
+    $curr_mode = $new_mode;
+    say "he $header_text sets l $curr_header_level from $prev_header_level" .
+      " and also m $curr_mode from $prev_mode";
+    # TODO: fix so it works properly!!
+    $curr_header_level <= $prev_header_level and $curr_mode ne 'normal' ? close_block : open_block;
+  }
+
+  else {
+    print ((' ' x ($indent_size * $nest_level)) . "$type  $_") unless $curr_mode eq 'normal';
   }
 }
 
