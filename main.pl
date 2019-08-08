@@ -2,6 +2,7 @@
 use 5.010;
 use warnings;
 use experimental qw( switch );
+use Data::Dumper;
 
  # This section contains parts important for both modes.
 
@@ -116,7 +117,7 @@ if ($should_weave) {
   exit 0;
 }
 
- # Start regex-powered parsers
+ # Start regex-powered parsers for headers
 
 # ∀ word, header: word is first in header => header is special.
 my %special_header_triggers =
@@ -124,12 +125,13 @@ my %special_header_triggers =
 
 sub header_type {
   my ($text) = @_;
-  $text =~ /^(.*) /;
-  return 'normal' unless exists $special_header_type{$1};
+  $text =~ /^([a-z]*) /;
+  return 'normal' unless exists $special_header_triggers{$1};
 
   my @words = split / /, $text;
   foreach (@words) {
-    return $1 if ($_ =~ /(fn|mod|struct|enum|impl)/) }
+    if ($_ =~ /(fn|mod|struct|enum|impl)/) { return $1 }
+  }
   die "Something wrong with header: $text";
 }
 
@@ -142,18 +144,56 @@ sub parse_header {
   ($nest, $text, $type)
 }
 
+ # Regex-powered parsers for bulletlists
+
+# Remove bullet and optional backticks from list item.
+sub disbullet {
+  $_ =~ /^\s*[\*\-\+] \`?([^\`]*)/; $1 }
+
+# (line on which parsing ended,
+#  result of parsing)
+sub parse_bulleted_list_generic {
+  my ($commencer, $joiner, $terminator, $first_line) = @_;
+  my $res = $commencer . disbullet($first_line);
+
+  while (<STDIN>) {
+    my $type = line_type $_;
+    return ($_, $res . $terminator) unless $type eq 'bullet' or $type eq 'text';
+    $res .= $joiner . disbullet $_ if $type eq 'bullet';
+  }
+}
+
+sub parse_bulleted_list_for_fn {
+  parse_bulleted_list_generic('(', ', ', ')', $_[0]) }
+sub parse_bulleted_list_for_struct_or_enum {
+  parse_bulleted_list_generic("    ", ",\n    ", "\n", $_[0]) }
+
  # Start methods for sections
 
 sub New {
-  my ($htype, $header1, $nest_lvl) = @_;
+  my ($nest_lvl, $header1, $htype) = @_;
   %obj =
   ( 'prologue' => '',        'epilogue' => '',
     'header1'  => $header1,  'header2'  => '',
     'header3'  => '',        'type'     => $htype,
     'nest_lvl' => $nest_lvl, 'body'     => '',
     'closed?'  => 0 );
-  print AsString(\%obj);
   %obj
+}
+
+
+sub ApplyBulletedList {
+  my ($obj_ref, $line) = @_;
+  if ($obj_ref->{'type'} eq 'fn') {
+    my ($stopline, $res) = parse_bulleted_list_for_fn $line;
+    $obj_ref->{'header2'} .= $res;
+    return $stopline;
+  }
+  elsif ($obj_ref->{'type'} =~ /struct|enum/) {
+    my ($stopline, $res) = parse_bulleted_list_for_struct_or_enum $line;
+    $obj_ref->{'body'} .= $res;
+    return $stopline;
+  }
 }
 
 sub AsString {
@@ -169,13 +209,18 @@ sub AsString {
 
 # First, read everything into array of sections:
 my @sections = ();
+my $line = '';
 while (<STDIN>) {
   my $type = line_type $_;
-  if ($type eq 'header') {
-    push @sections, New parse_header $_;
-  } else {
-    print "$type	$_"
+  if ($type eq 'header') { 
+    my %new_section = New parse_header $_;
+    push @sections, \%new_section;
+  } 
+  elsif ($type eq 'bullet') { 
+    $line = ApplyBulletedList $sections[-1];
+    print AsString $sections[-1];
   }
+  elsif ($type ne 'text') { print "$type	$_" }
 }
 
 # # Second, push fake section object. It is required by the alcorithm:

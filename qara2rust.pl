@@ -4,18 +4,6 @@ use 5.010;
 use warnings;
 use experimental qw( switch );
 
-sub ApplyBulletedList {
-  my ($obj, $line) = @_;
-  given ($obj->{'type'}) {
-    when('fn') { 
-      $obj->{'header2'} .= parse_bulleted_list_for_fn $line }
-    when(['struct', 'enum']) {
-      $obj->{'body'} .= parse_bulleted_list_for_struct_or_enum $line }
-    default {}
-  }
-  %obj;
-}
-
 sub ApplyNumberedList {
   my (%obj, $line) = @_;
   given ($obj{'type'}) {
@@ -43,32 +31,6 @@ sub AsString {
   "$obj{'prologue'}$obj->{'header1'} $obj->{'header2'} $obj->{'header3'} {\n" .
   "$obj->{'body'}$obj->{'epilogue'}\n}\n";
 }
-
-# Remove bullet and optional backticks from list item.
-sub disbullet {
-  $_ =~ /^\s*[\*\-\+] \`?([^\`]*)/;
-  $1;
-}
-
-# (line on which parsing ended,
-#  result of parsing)
-sub parse_bulleted_list_generic {
-  my ($commencer, $joiner, $terminator, $first_line) = @_;
-  my $res = $commencer . disbullet($_);
-
-  while (<STDIN>) {
-    my $type = line_type $_;
-    return ($_, $res . $terminator) 
-      unless $type eq 'bullet' or $type eq 'text';
-    $res .= $joiner . disbullet $_ if $type eq 'bullet';
-  }
-}
-
-sub parse_bulleted_list_for_fn {
-  parse_bulleted_list_generic('(', ', ', ')', $_) }
-sub parse_bulleted_list_for_struct_or_enum {
-  parse_bulleted_list_generic("{\n    ", ",\n    ", "\n}", $_) }
-
 my @doc = ();
 
 sub close_sections {
