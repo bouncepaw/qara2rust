@@ -117,7 +117,7 @@ if ($should_weave) {
   exit 0;
 }
 
- # Start regex-powered parsers for headers
+ # Start parsers for headers
 
 # ∀ word, header: word is first in header => header is special.
 my %special_header_triggers =
@@ -144,7 +144,17 @@ sub parse_header {
   ($nest, $text, $type)
 }
 
- # Regex-powered parsers for codelets
+sub New {
+  my ($nest_lvl, $header1, $htype) = @_;
+  %obj =
+  ( 'prologue' => '',        'epilogue' => '',
+    'header1'  => $header1,  'header2'  => '',
+    'header3'  => '',        'type'     => $htype,
+    'nest_lvl' => $nest_lvl, 'body'     => '',
+    'closed?'  => 0 );
+  %obj
+}
+ # Parsers for codelets
 
 # (line on which parsing ended,
 #  result of parsing)
@@ -157,7 +167,13 @@ sub parse_codelet {
   }
 }
 
- # Regex-powered parsers for numbered lists
+sub ApplyCodelet {
+  my ($obj_ref, $line) = @_;
+  my ($stopline, $res) = parse_codelet $line;
+  $obj_ref->{'body'} .= $res;
+  $stopline
+}
+ # parsers for numbered lists
 
 # Remove index and optional backticks from list item.
 sub disindex {
@@ -180,7 +196,17 @@ sub parse_numbered_list_for_fn {
   }
 }
 
- # Regex-powered parsers for bulletlists
+sub ApplyNumberedList {
+  my ($obj_ref, $line) = @_;
+  if ($obj_ref->{'type'} eq 'fn') {
+    my ($stopline, $res) = parse_numbered_list_for_fn $line;
+    $obj_ref->{'header3'} = $res;
+    return $stopline;
+  }
+  ''
+}
+
+ # parsers for bulletlists
 
 # Remove bullet and optional backticks from list item.
 sub disbullet {
@@ -204,19 +230,6 @@ sub parse_bulleted_list_for_fn {
 sub parse_bulleted_list_for_struct_or_enum {
   parse_bulleted_list_generic("    ", ",\n    ", "\n", $_[0]) }
 
- # Start methods for sections
-
-sub New {
-  my ($nest_lvl, $header1, $htype) = @_;
-  %obj =
-  ( 'prologue' => '',        'epilogue' => '',
-    'header1'  => $header1,  'header2'  => '',
-    'header3'  => '',        'type'     => $htype,
-    'nest_lvl' => $nest_lvl, 'body'     => '',
-    'closed?'  => 0 );
-  %obj
-}
-
 sub ApplyBulletedList {
   my ($obj_ref, $line) = @_;
   if ($obj_ref->{'type'} eq 'fn') {
@@ -232,22 +245,6 @@ sub ApplyBulletedList {
   ''
 }
 
-sub ApplyNumberedList {
-  my ($obj_ref, $line) = @_;
-  if ($obj_ref->{'type'} eq 'fn') {
-    my ($stopline, $res) = parse_numbered_list_for_fn $line;
-    $obj_ref->{'header3'} = $res;
-    return $stopline;
-  }
-  ''
-}
-
-sub ApplyCodelet {
-  my ($obj_ref, $line) = @_;
-  my ($stopline, $res) = parse_codelet $line;
-  $obj_ref->{'body'} .= $res;
-  $stopline
-}
 
 sub AsString {
   my ($hash_ref) = @_;
@@ -282,6 +279,7 @@ while (<STDIN>) {
     $line = ApplyCodelet $sections[-1];
     print AsString $sections[-1];
   }
+  elsif ($type eq 'text' or $type eq 'blank') {}
   else { print "$type	$_" }
 }
 
