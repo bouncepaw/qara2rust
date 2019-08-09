@@ -144,6 +144,29 @@ sub parse_header {
   ($nest, $text, $type)
 }
 
+ # Regex-powered parsers for numbered lists
+
+# Remove index and optional backticks from list item.
+sub disindex {
+  $_ = /^\s*\d*. \`?([^\`]*)/; $1}
+
+# (line on which parsing ended,
+#  result of parsing)
+sub parse_numbered_list_for_fn {
+  my ($line) = @_;
+  my $res = disindex $line;
+
+  while (<STDIN>) {
+    $line = $_;
+    my $type = line_type $line;
+    unless ($type =~ m/index|text/) {
+      my @possible_returnees = (" -> $res", " -> ($res)");
+      return ($line, $possible_returnees[$res =~ m/\,/ ? 1 : 0]);
+    }
+    $res .= ', ' . disindex $line if ($type eq 'index');
+  }
+}
+
  # Regex-powered parsers for bulletlists
 
 # Remove bullet and optional backticks from list item.
@@ -181,7 +204,6 @@ sub New {
   %obj
 }
 
-
 sub ApplyBulletedList {
   my ($obj_ref, $line) = @_;
   if ($obj_ref->{'type'} eq 'fn') {
@@ -194,6 +216,17 @@ sub ApplyBulletedList {
     $obj_ref->{'body'} .= $res;
     return $stopline;
   }
+  ''
+}
+
+sub ApplyNumberedList {
+  my ($obj_ref, $line) = @_;
+  if ($obj_ref->{'type'} eq 'fn') {
+    my ($stopline, $res) = parse_numbered_list_for_fn $line;
+    $obj_ref->{'header3'} = $res;
+    return $stopline;
+  }
+  ''
 }
 
 sub AsString {
@@ -216,11 +249,15 @@ while (<STDIN>) {
     my %new_section = New parse_header $_;
     push @sections, \%new_section;
   } 
+  if ($type eq 'index') {
+    $line = ApplyNumberedList $sections[-1];
+    print AsString $sections[-1];
+  }
   elsif ($type eq 'bullet') { 
     $line = ApplyBulletedList $sections[-1];
     print AsString $sections[-1];
   }
-  elsif ($type ne 'text') { print "$type	$_" }
+  else { print "$type	$_" }
 }
 
 # # Second, push fake section object. It is required by the alcorithm:
