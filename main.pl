@@ -144,6 +144,19 @@ sub parse_header {
   ($nest, $text, $type)
 }
 
+ # Regex-powered parsers for codelets
+
+# (line on which parsing ended,
+#  result of parsing)
+sub parse_codelet {
+  my $res = "";
+
+  while (<STDIN>) {
+    return ($_, $res) if 'fence' eq line_type $_;
+    $res .= $_;
+  }
+}
+
  # Regex-powered parsers for numbered lists
 
 # Remove index and optional backticks from list item.
@@ -229,8 +242,16 @@ sub ApplyNumberedList {
   ''
 }
 
+sub ApplyCodelet {
+  my ($obj_ref, $line) = @_;
+  my ($stopline, $res) = parse_codelet $line;
+  $obj_ref->{'body'} .= $res;
+  $stopline
+}
+
 sub AsString {
   my ($hash_ref) = @_;
+  return $hash_ref->{'body'} if ($hash_ref->{'type'} eq 'normal');
   $hash_ref->{'prologue'} . $hash_ref->{'header1'} . $hash_ref->{'header2'}
   . $hash_ref->{'header3'} . " {\n". $hash_ref->{'body'}
   . $hash_ref->{'epilogue'} . "}\n"
@@ -249,12 +270,16 @@ while (<STDIN>) {
     my %new_section = New parse_header $_;
     push @sections, \%new_section;
   } 
-  if ($type eq 'index') {
+  elsif ($type eq 'index') {
     $line = ApplyNumberedList $sections[-1];
     print AsString $sections[-1];
   }
   elsif ($type eq 'bullet') { 
     $line = ApplyBulletedList $sections[-1];
+    print AsString $sections[-1];
+  }
+  elsif ($type eq 'fence') {
+    $line = ApplyCodelet $sections[-1];
     print AsString $sections[-1];
   }
   else { print "$type	$_" }
