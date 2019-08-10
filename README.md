@@ -13,16 +13,16 @@ From this:
 
 ```md
 ## enum Weather
-- `Rainy`
-- `Sunny`
+- Rainy
+- Sunny
 ```
 
 To this:
 
 ```rust
 enum Weather {
-  Rainy,
-  Sunny
+    Rainy,
+    Sunny
 }
 ```
 
