@@ -97,7 +97,7 @@ EOK
     default                    { die "Unknown option: $_" } }
   my $opt = $_; 
 }
- # End option parsing
+ # This section is about weave mode
 
 if ($should_weave) {
   my $in_codelet = 0;
@@ -173,7 +173,7 @@ sub ApplyCodelet {
   $obj_ref->{'body'} .= $res;
   $stopline
 }
- # parsers for numbered lists
+ # Parsers for numbered lists
 
 # Remove index and optional backticks from list item.
 sub disindex {
@@ -245,18 +245,43 @@ sub ApplyBulletedList {
   ''
 }
 
+ # Parsers for quotes
 
+sub disquote {
+  $_ =~ /^\s*\>\s*(.*$)/; $1 }
+
+sub parse_quote {
+  my ($line) = @_;
+  my $res = disquote($line) . "\n";
+
+  while (<STDIN>) {
+    return ($_, $res) if 'quote' ne line_type $_ ;
+    $res .= disquote($_) . "\n";
+  }
+}
+
+sub ApplyQuote {
+  my ($obj_ref, $line) = @_;
+  if ($obj_ref->{'type'} ne 'normal') {
+    my ($stopline, $res) = parse_quote $line;
+    $obj_ref->{'prologue'} = $res;
+    return $stopline;
+  }
+  ''
+}
+
+ # Start main part
 sub AsString {
   my ($hash_ref) = @_;
-  return $hash_ref->{'body'} if ($hash_ref->{'type'} eq 'normal');
+  return $hash_ref->{'body'} . $hash_ref->{'epilogue'}
+  if ($hash_ref->{'type'} eq 'normal');
+
+  if ($hash_ref->{'type'} eq 'fn' and not $hash_ref->{'header2'}) {
+    $hash_ref->{'header2'} = '()'}
   $hash_ref->{'prologue'} . $hash_ref->{'header1'} . $hash_ref->{'header2'}
   . $hash_ref->{'header3'} . " {\n". $hash_ref->{'body'}
   . $hash_ref->{'epilogue'} . "}\n"
 }
-
- # Start cool section object transformators
-
- # Start main part
 
 # First, read everything into array of sections:
 my @sections = ();
@@ -269,22 +294,59 @@ while (<STDIN>) {
   } 
   elsif ($type eq 'index') {
     $line = ApplyNumberedList $sections[-1];
-    print AsString $sections[-1];
   }
   elsif ($type eq 'bullet') { 
     $line = ApplyBulletedList $sections[-1];
-    print AsString $sections[-1];
   }
   elsif ($type eq 'fence') {
     $line = ApplyCodelet $sections[-1];
-    print AsString $sections[-1];
+  }
+  elsif ($type eq 'quote') {
+    $line = ApplyQuote $sections[-1];
   }
   elsif ($type eq 'text' or $type eq 'blank') {}
   else { print "$type	$_" }
 }
 
-# # Second, push fake section object. It is required by the alcorithm:
-# push @sections, New('normal', '', 0);
+# Second, push fake section object. It is required by the alcorithm:
+my %fake_section = New(0, 'normal', '');
+push @sections, \%fake_section;
 
-# # Third, print everything:
-# print join '', map(AsString, @sections);
+# Third, declare some tricky functons that will be used later:
+sub close_sections {
+  my ($sections_ref) = @_;
+  # I used < for purpose.
+  for ($i = 0; $i < $#$sections_ref; $i++) {
+    $sections_ref->[$i]->{'closed?'} = 1 if
+    $sections_ref->[$i]->{'nest_lvl'} >= $sections_ref->[$i + 1]->{'nest_lvl'}
+  }
+}
+
+sub merge_sections {
+  my ($sections_ref) = @_;
+  my $changed_anything = 0;
+  for ($i = 0; $i < $#$sections_ref; $i++) {
+    if ($sections_ref->[$i]->{'closed?'} == 0
+        and $sections_ref->[$i + 1]->{'closed?'}) {
+      $sections_ref->[$i]->{'epilogue'} .= AsString $sections_ref->[$i + 1];
+      undef $sections_ref->[$i + 1];
+      $i++;
+      $changed_anything = 1;
+    }
+  }
+  $changed_anything
+}
+
+# Fourth, apply the tricky alcorithm until it's ok:
+my $changed_anything = 0;
+do {
+  close_sections \@sections;
+  $changed_anything = merge_sections \@sections;
+  @sections = grep defined, @sections;
+} while ($changed_anything);
+
+# Fifth, remove the fake sections object as it is not needed anymore:
+pop @sections;
+
+# Sixth, join and print everything.
+print join '', map({ AsString $_ } @sections)

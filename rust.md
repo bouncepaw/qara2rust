@@ -29,9 +29,11 @@ Impl blocks are also supported.
 
 #### pub fn new
 
-> This text will end up in resulting code, unlike simple paragraphs that will 
-> get stripped. You can use it for things like derive or test annotations, 
-> because it will be placed before declaration.
+This text will end up in resulting code, unlike simple paragraphs that will
+get stripped. You can use it for things like derive or test annotations,
+because it will be placed before declaration:
+
+> #[derive(Debug)]
 
 Parameters are declared using lists, no list = no parameters.
 
@@ -60,7 +62,7 @@ Line {
 (self.no, self.content)
 ```
 
-#### enum LineType
+### enum LineType
 
 As with structs, no codelets are necessary to declare an enum.
 
